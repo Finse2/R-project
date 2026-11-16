@@ -1,0 +1,14 @@
+# Large or rebuildable files: the database is recreated by 01_load.R,
+# the recommender model by music-recommender/train.R
+data/musicbrainz.duckdb
+data/*.wal
+music-recommender/model/
+.Rhistory
+.RData
+.Rproj.user/
+
+# Secrets for the server (Cloudflare token, domain)
+deploy/.env
+
+# Editor settings
+.idea/

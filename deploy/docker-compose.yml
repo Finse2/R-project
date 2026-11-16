@@ -1,0 +1,67 @@
+# MusicBrainz Explorer on a server: app + local AI model + a way in from the internet.
+# Step-by-step instructions: deploy/README.md
+#
+# Choose ONE way in with a profile:
+#   --profile tunnel   Cloudflare Tunnel (no router changes). Needs TUNNEL_TOKEN in deploy/.env
+#   --profile caddy    Router port forwarding of 80/443 + automatic HTTPS. Needs DOMAIN in deploy/.env
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ../data/musicbrainz.duckdb:/app/data/musicbrainz.duckdb:ro
+      - ../music-recommender/model:/app/music-recommender/model:ro
+    # Also reachable on the home network at http://<server-ip>:3838 (for testing)
+    ports:
+      - "3838:3838"
+
+  # Shares the app's network, so the app reaches it at http://127.0.0.1:11434.
+  # llm.R only accepts a local address; this keeps that rule without changes,
+  # and Ollama is never reachable from outside.
+  # Runs on the CPU (no GPU needed). The model stays loaded (~3 GB of RAM) so
+  # requests do not wait for it to load again after a few idle minutes.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    network_mode: "service:app"
+    environment:
+      - OLLAMA_HOST=127.0.0.1:11434
+      - OLLAMA_KEEP_ALIVE=24h
+    volumes:
+      - ollama:/root/.ollama
+
+  # Option 1: Cloudflare Tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+
+  # Option 2: port forwarding; gets and renews the HTTPS certificate for DOMAIN
+  caddy:
+    image: caddy:2
+    profiles: ["caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  ollama:
+  caddy_data:
+  caddy_config:

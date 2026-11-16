@@ -1,0 +1,9 @@
+# Keep the image small: the database and model are mounted, not copied
+data/musicbrainz.duckdb
+data/*.wal
+music-recommender/model/
+output/figures/
+docs/
+.idea/
+.git/
+*.Rhistory
